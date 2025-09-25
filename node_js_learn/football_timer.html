@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>Football Timer – ครึ่งแรก/หลัง + ทีมเยือนยิงสุ่ม</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#0b1020; --card:#111834; --ink:#eef3ff; --muted:#a8b3d1; --accent:#4ba3ff;
+      --good:#20c997; --warn:#ffd166; --danger:#ff6b6b;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:24px; background:var(--bg); color:var(--ink);
+      font:16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+    }
+    .wrap{max-width:900px; margin:auto; display:grid; gap:16px}
+    .card{
+      background:var(--card); border:1px solid #1b2450; border-radius:16px; padding:18px; box-shadow:0 6px 20px rgba(0,0,0,.25);
+    }
+    h1{margin:0 0 4px; font-size:22px}
+    .muted{color:var(--muted); font-size:14px}
+    .grid{display:grid; gap:12px}
+    .grid.cols{grid-template-columns: 1fr 1fr}
+    label{display:block; font-size:14px; color:var(--muted); margin-bottom:6px}
+    input, select, button{
+      width:100%; padding:10px 12px; border-radius:12px; border:1px solid #2a356b; background:#0d1533; color:var(--ink);
+      outline:none;
+    }
+    input:focus, select:focus{border-color:var(--accent)}
+    button{
+      cursor:pointer; background:#11205a; border-color:#203383; transition:.15s;
+    }
+    button.primary{background:var(--accent); color:#041029; border-color:#52a9ff}
+    button.good{background:var(--good); color:#06291f; border-color:#1fbf8f}
+    button.warn{background:var(--warn); color:#3a2a00; border-color:#f3c556}
+    button.danger{background:var(--danger); color:#2a0606; border-color:#ff5b5b}
+    button:disabled{opacity:.6; cursor:not-allowed}
+    .controls{display:flex; flex-wrap:wrap; gap:10px}
+    .scoreboard{
+      display:flex; align-items:center; justify-content:center; gap:10px; font-weight:700; font-size:26px;
+      background:#0c173a; border:1px solid #1f2b63; border-radius:14px; padding:10px;
+    }
+    .team{max-width:42%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .minute{font-variant-numeric:tabular-nums; color:var(--muted); font-size:14px}
+    .log{
+      background:#0a1230; border:1px solid #1b2450; border-radius:14px; padding:12px; height:300px; overflow:auto;
+      font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size:14px; line-height:1.5;
+    }
+    .log .goal{color:var(--good); font-weight:700}
+    .log .ft{color:var(--accent); font-weight:700}
+    .log .ht{color:var(--warn); font-weight:700}
+    .row{display:flex; gap:6px}
+    .grow{flex:1}
+    .hint{font-size:13px; color:var(--muted)}
+    .pill{display:inline-block; padding:2px 8px; border-radius:999px; background:#0e1c47; border:1px solid #20306a; font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Football Timer</h1>
+      <div class="muted">
+        10 วินาทีจริง = 10 นาทีเกม • แสดงผลทุก 10 วิ • เจ้าบ้านได้ประตู +1 ทุกครั้ง • พักครึ่งอัตโนมัติที่ 45’
+      </div>
+    </div>
+
+    <div class="card grid">
+      <div class="grid cols">
+        <div>
+          <label>ชื่อทีมเจ้าบ้าน</label>
+          <input id="home" placeholder="เช่น Man Utd" />
+        </div>
+        <div>
+          <label>ชื่อทีมเยือน</label>
+          <input id="away" placeholder="เช่น Chelsea" />
+        </div>
+      </div>
+
+      <div class="grid cols">
+        <div>
+          <label>ความถี่การอัปเดต</label>
+          <select id="tick">
+            <option value="10000" selected>ทุก 10 วินาที = 10 นาที (โหมดจริง)</option>
+            <option value="1000">ทุก 1 วินาที = 10 นาที (โหมดเร็วทดสอบ)</option>
+          </select>
+          <div class="hint">ปรับเป็น 1 วิ เพื่อทดสอบเร็ว ๆ ได้</div>
+        </div>
+
+        <div class="grid">
+          <div class="row">
+            <label class="pill"><input id="awayRandom" type="checkbox" style="margin-right:6px" /> สุ่มทีมเยือนยิงประตู</label>
+            <select id="awayProb" title="โอกาสทีมเยือนยิงต่อหนึ่งช่วง 10 นาที" disabled>
+              <option value="0.10">โอกาส 10%</option>
+              <option value="0.15" selected>โอกาส 15%</option>
+              <option value="0.25">โอกาส 25%</option>
+              <option value="0.35">โอกาส 35%</option>
+            </select>
+          </div>
+          <div class="hint">ถ้าเปิด “สุ่มทีมเยือนยิง” จะมีโอกาสยิงได้ในแต่ละช่วง 10 นาทีตามเปอร์เซ็นต์ที่เลือก</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="start" class="primary grow">เริ่ม</button>
+        <button id="pause" class="warn" disabled>พัก</button>
+        <button id="resume" class="good" disabled>เล่นต่อ</button>
+        <button id="reset" class="danger" disabled>รีเซ็ต</button>
+      </div>
+    </div>
+
+    <div class="card grid">
+      <div class="scoreboard">
+        <div class="team" id="homeLabel">-</div>
+        <div id="score">0 : 0</div>
+        <div class="team" id="awayLabel">-</div>
+      </div>
+      <div class="minute" id="minute">นาทีที่ 0' — <span id="phase">ครึ่งแรก</span></div>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <script>
+    // ------- สถานะเกม -------
+    let minute = 0;
+    let scoreHome = 0;
+    let scoreAway = 0;
+    let timer = null;
+    let running = false;
+    let paused = false;
+    let halftimeDone = false;  // ใช้กันพักครึ่งครั้งที่สอง
+    const HALF_TIME_PAUSE_MS = 2000; // หยุด 2 วิที่ 45’ แล้วเดินต่อเอง
+
+    // ------- อ้างอิง DOM -------
+    const elHome = document.getElementById('home');
+    const elAway = document.getElementById('away');
+    const elTick = document.getElementById('tick');
+    const elStart = document.getElementById('start');
+    const elPause = document.getElementById('pause');
+    const elResume = document.getElementById('resume');
+    const elReset = document.getElementById('reset');
+    const elScore = document.getElementById('score');
+    const elHomeLabel = document.getElementById('homeLabel');
+    const elAwayLabel = document.getElementById('awayLabel');
+    const elMinute = document.getElementById('minute');
+    const elPhase = document.getElementById('phase');
+    const elLog = document.getElementById('log');
+    const elAwayRandom = document.getElementById('awayRandom');
+    const elAwayProb = document.getElementById('awayProb');
+
+    elAwayRandom.addEventListener('change', () => {
+      elAwayProb.disabled = !elAwayRandom.checked;
+    });
+
+    function appendLog(text, cls = '') {
+      const line = document.createElement('div');
+      line.textContent = text;
+      if (cls) line.classList.add(cls);
+      elLog.appendChild(line);
+      elLog.scrollTop = elLog.scrollHeight;
+    }
+
+    function render() {
+      elScore.textContent = `${scoreHome} : ${scoreAway}`;
+      elMinute.textContent = `นาทีที่ ${minute}' — `;
+      const span = document.createElement('span');
+      span.id = 'phase';
+      span.textContent = halftimeDone ? 'ครึ่งหลัง' : 'ครึ่งแรก';
+      elMinute.appendChild(span);
+    }
+
+    function printLine() {
+      const m = String(minute).padStart(2, ' ');
+      appendLog(`${m}'  ${elHomeLabel.textContent} ${scoreHome} : ${scoreAway} ${elAwayLabel.textContent}`);
+    }
+
+    function kickoff() {
+      minute = 0;
+      scoreHome = 0;
+      scoreAway = 0;
+      halftimeDone = false;
+      render();
+      elLog.innerHTML = '';
+      appendLog('เริ่มการแข่งขัน! (10 วิจริง = 10 นาทีเกม)');
+      appendLog('ช่วงเวลา: ครึ่งแรก');
+      printLine(); // 0'
+    }
+
+    function maybeAwayGoal() {
+      if (!elAwayRandom.checked) return false;
+      const p = parseFloat(elAwayProb.value || '0.15');
+      if (Math.random() < p) {
+        scoreAway += 1;
+        appendLog(`GOAL! ${elAwayLabel.textContent} ยิงประตู!`, 'goal');
+        return true;
+      }
+      return false;
+    }
+
+    function doHalftimeBreak() {
+      // แทรกนาที 45' โดยไม่เพิ่มสกอร์
+      minute = 45;
+      render();
+      printLine();
+      appendLog('พักครึ่ง (Half Time) — หยุดชั่วคราว 2 วิ', 'ht');
+      pauseCore(true); // pause แบบภายใน (ไม่เปลี่ยนปุ่มเป็น "เล่นต่อ" ให้ผู้ใช้สับสน)
+
+      setTimeout(() => {
+        halftimeDone = true;
+        appendLog('เริ่มครึ่งหลัง', 'ht');
+        resumeCore(true); // resume แบบภายใน
+      }, HALF_TIME_PAUSE_MS);
+    }
+
+    function tickOnce() {
+      // ถ้ากำลังจะเข้าพักครึ่ง: เมื่ออยู่ที่ 40' ให้แทรกเหตุการณ์ 45'
+      if (!halftimeDone && minute === 40) {
+        doHalftimeBreak();
+        return; // จบรอบนี้ (ยังไม่ขยับไป 50')
+      }
+
+      // เดินเวลาปกติ: +10 นาที
+      minute += 10;
+
+      // เจ้าบ้านได้ +1 ทุกช่วง
+      scoreHome += 1;
+
+      // ทีมเยือนมีโอกาสยิงแบบสุ่ม
+      maybeAwayGoal();
+
+      render();
+      printLine();
+
+      // จบเกมที่ 90'
+      if (minute >= 90) {
+        stopTimer();
+        appendLog('หมดเวลา!  Full Time', 'ft');
+        appendLog(`สรุปผล: ${elHomeLabel.textContent} ${scoreHome} : ${scoreAway} ${elAwayLabel.textContent}`, 'ft');
+      }
+    }
+
+    // ----- ควบคุมเวลา -----
+    function startTimer() {
+      const delay = parseInt(elTick.value, 10);
+      if (running) return;
+      running = true;
+      paused = false;
+      timer = setInterval(tickOnce, delay);
+      elStart.disabled = true;
+      elPause.disabled = false;
+      elResume.disabled = true;
+      elReset.disabled = false;
+      elHome.disabled = true;
+      elAway.disabled = true;
+      elTick.disabled = true;
+      elAwayRandom.disabled = true;
+      elAwayProb.disabled = !elAwayRandom.checked || true; // ล็อกตอนเริ่มเกม
+    }
+
+    function stopTimer() {
+      running = false;
+      paused = false;
+      clearInterval(timer);
+      timer = null;
+      elStart.disabled = true;
+      elPause.disabled = true;
+      elResume.disabled = true;
+      elReset.disabled = false;
+    }
+
+    function pauseCore(internal = false) {
+      if (!running || paused) return;
+      clearInterval(timer);
+      paused = true;
+      if (!internal) appendLog('— พักเกม —');
+      // ปุ่ม
+      if (!internal) {
+        elPause.disabled = true;
+        elResume.disabled = false;
+      }
+    }
+
+    function resumeCore(internal = false) {
+      if (!paused) return;
+      paused = false;
+      const delay = parseInt(elTick.value, 10);
+      timer = setInterval(tickOnce, delay);
+      if (!internal) appendLog('— เริ่มต่อ —');
+      // ปุ่ม
+      if (!internal) {
+        elStart.disabled = true;
+        elPause.disabled = false;
+        elResume.disabled = true;
+      }
+    }
+
+    function pauseTimer() { pauseCore(false); }
+    function resumeTimer() { resumeCore(false); }
+
+    function resetAll() {
+      clearInterval(timer);
+      timer = null;
+      running = false;
+      paused = false;
+      halftimeDone = false;
+      kickoff();
+      // ปุ่มกลับสภาพเริ่มต้น
+      elStart.disabled = false;
+      elPause.disabled = true;
+      elResume.disabled = true;
+      elReset.disabled = true;
+      elHome.disabled = false;
+      elAway.disabled = false;
+      elTick.disabled = false;
+      elAwayRandom.disabled = false;
+      elAwayProb.disabled = !elAwayRandom.checked;
+    }
+
+    // ------- Events -------
+    elStart.addEventListener('click', () => {
+      const home = (elHome.value || 'Team A').trim();
+      const away = (elAway.value || 'Team B').trim();
+      elHomeLabel.textContent = home;
+      elAwayLabel.textContent = away;
+      kickoff();
+      startTimer();
+    });
+
+    elPause.addEventListener('click', pauseTimer);
+    elResume.addEventListener('click', resumeTimer);
+    elReset.addEventListener('click', resetAll);
+    elAway.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !running) elStart.click();
+    });
+
+    // เริ่มด้วยสถานะพร้อมใช้งาน
+    resetAll();
+  </script>
+</body>
+</html>
